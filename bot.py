@@ -1,23 +1,38 @@
 import os
 import csv
 import asyncio
+import threading
+from flask import Flask
+from pyrogram import Client, filters
 
-# Render aur naye Python versions ke liye Event Loop fix (Error yahi theek karega)
+# --- DUMMY WEB SERVER (RENDER KE LIYE FIX) ---
+web_app = Flask(__name__)
+
+@web_app.route('/')
+def home():
+    return "Bot is Live on Render!"
+
+def run_server():
+    # Render khud $PORT variable deta hai, nahi mila toh 8080 use karega
+    port = int(os.environ.get("PORT", 8080))
+    web_app.run(host="0.0.0.0", port=port, use_reloader=False)
+
+# Server ko alag background thread me start kar rahe hain taaki bot block na ho
+threading.Thread(target=run_server, daemon=True).start()
+# ---------------------------------------------
+
+# Render aur naye Python versions ke liye Event Loop fix
 try:
     asyncio.get_event_loop()
 except RuntimeError:
     asyncio.set_event_loop(asyncio.new_event_loop())
 
-from pyrogram import Client, filters
-
-# Environment variables se credentials fetch karenge
 API_ID = os.environ.get("API_ID")
 API_HASH = os.environ.get("API_HASH")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 app = Client("csv_filter_bot", api_id=int(API_ID), api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# Temporary memory bot ke liye: Kaunse user ki konsi file process ho rahi hai
 user_states = {}
 
 @app.on_message(filters.document)
@@ -38,7 +53,6 @@ async def handle_csv(client, message):
                             failed_numbers.append(phone)
             
             if failed_numbers:
-                # Numbers ko state me save kar lenge aur naam poochenge
                 user_states[message.chat.id] = {
                     "status": "waiting_for_name",
                     "numbers": failed_numbers
@@ -64,23 +78,18 @@ async def handle_csv(client, message):
 async def handle_filename(client, message):
     chat_id = message.chat.id
     
-    # Check karenge ki kya bot is user se file ka naam expect kar raha hai
     if chat_id in user_states and user_states[chat_id]["status"] == "waiting_for_name":
-        # User ne jo naam diya usko clean karenge
         file_name_input = message.text.strip()
         
-        # Agar user ne galti se .txt laga diya hai toh hata denge
         if file_name_input.lower().endswith(".txt"):
             file_name_input = file_name_input[:-4]
             
-        # File ka final naam
         output_txt = f"{file_name_input}.txt"
         failed_numbers = user_states[chat_id]["numbers"]
         
         processing_msg = await message.reply("File bana raha hu...")
         
         try:
-            # File create kar rahe hain
             with open(output_txt, 'w', encoding='utf-8') as out_f:
                 for num in failed_numbers:
                     out_f.write(num + "\n")
@@ -93,7 +102,6 @@ async def handle_filename(client, message):
         except Exception as e:
             await message.reply(f"File banane me error aaya: {str(e)}")
         finally:
-            # Kaam hone ke baad file delete kardo aur state clear kardo
             if os.path.exists(output_txt):
                 os.remove(output_txt)
             del user_states[chat_id]
