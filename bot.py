@@ -1,11 +1,16 @@
+# === SABSE PEHLE EVENT LOOP FIX (Ye ekdum upar hona zaroori hai) ===
+import asyncio
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+# ====================================================================
+
 import os
 import csv
-import asyncio
 import threading
 from flask import Flask
 from pyrogram import Client, filters
 
-# --- DUMMY WEB SERVER (RENDER KE LIYE FIX) ---
+# --- DUMMY WEB SERVER (RENDER KI DEPLOYMENT PASS KARNE KE LIYE) ---
 web_app = Flask(__name__)
 
 @web_app.route('/')
@@ -13,26 +18,20 @@ def home():
     return "Bot is Live on Render!"
 
 def run_server():
-    # Render khud $PORT variable deta hai, nahi mila toh 8080 use karega
     port = int(os.environ.get("PORT", 8080))
     web_app.run(host="0.0.0.0", port=port, use_reloader=False)
 
-# Server ko alag background thread me start kar rahe hain taaki bot block na ho
 threading.Thread(target=run_server, daemon=True).start()
-# ---------------------------------------------
+# ------------------------------------------------------------------
 
-# Render aur naye Python versions ke liye Event Loop fix
-try:
-    asyncio.get_event_loop()
-except RuntimeError:
-    asyncio.set_event_loop(asyncio.new_event_loop())
-
+# Environment Variables
 API_ID = os.environ.get("API_ID")
 API_HASH = os.environ.get("API_HASH")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 app = Client("csv_filter_bot", api_id=int(API_ID), api_hash=API_HASH, bot_token=BOT_TOKEN)
 
+# User ki file aur state save karne ke liye
 user_states = {}
 
 @app.on_message(filters.document)
